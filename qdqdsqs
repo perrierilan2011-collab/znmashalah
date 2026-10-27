@@ -1,0 +1,1688 @@
+-- ZNK HUB v8 - No Key System
+-- Direct load via Rayfield
+
+local success, err = pcall(function()
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- =====================================================
+-- SAVE MANAGER
+-- =====================================================
+
+local SaveManager = {}
+SaveManager.Folder = "ZNKHubConfig"
+SaveManager.File = "Config.json"
+
+function SaveManager:GetPath()
+    return self.Folder .. "/" .. self.File
+end
+
+function SaveManager:Save(config)
+    local json = HttpService:JSONEncode(config)
+    if writefile then
+        if not isfolder(self.Folder) then makefolder(self.Folder) end
+        writefile(self:GetPath(), json)
+    end
+end
+
+function SaveManager:Load()
+    if readfile and isfile(self:GetPath()) then
+        local ok, result = pcall(function()
+            return HttpService:JSONDecode(readfile(self:GetPath()))
+        end)
+        if ok then return result end
+    end
+    return nil
+end
+
+-- =====================================================
+-- CONFIGS
+-- =====================================================
+
+local AimbotConfig = {
+    Enabled = false,
+    TargetPart = "Head",
+    FOV = 150,
+    Smoothing = 0.3,
+    TeamCheck = false,
+    WallCheck = false,
+    ShowFOV = true,
+    FOVColor = Color3.fromRGB(255, 255, 255),
+    Keybind = Enum.KeyCode.E,
+}
+
+local ESPConfig = {
+    Enabled = false,
+    BoxESP = true,
+    SkeletonESP = false,
+    ShowName = true,
+    ShowHealth = true,
+    ShowDistance = true,
+    ShowTool = true,
+    ShowTeam = true,
+    BoxColor = Color3.fromRGB(255, 255, 255),
+    SkeletonColor = Color3.fromRGB(0, 255, 0),
+    NameColor = Color3.fromRGB(255, 255, 255),
+    HealthColor = Color3.fromRGB(0, 255, 0),
+    DistanceColor = Color3.fromRGB(255, 255, 0),
+    ToolColor = Color3.fromRGB(0, 200, 255),
+    TeamColor = Color3.fromRGB(255, 150, 0),
+    MaxDistance = 2000,
+    TeamCheck = false,
+    BoxThickness = 1,
+    SkeletonThickness = 1,
+    TextSize = 13,
+}
+
+local CrosshairConfig = {
+    Enabled = false,
+    Color = Color3.fromRGB(255, 255, 255),
+    Size = 20,
+    Thickness = 1,
+    Transparency = 0,
+    Outline = true,
+    OutlineColor = Color3.fromRGB(0, 0, 0),
+    Rotate = false,
+}
+
+local MovementConfig = {
+    Speed = false,
+    SpeedValue = 16,
+    SpeedCurrent = 16,
+    Jump = false,
+    JumpValue = 50,
+    InfiniteJump = false,
+    Noclip = false,
+    Fly = false,
+    FlySpeed = 50,
+}
+
+local MiscConfig = {
+    JesusBackground = false,
+    JesusTransparency = 0.5,
+    MenuKeybind = Enum.KeyCode.RightShift,
+}
+
+-- =====================================================
+-- COLOR SERIALISATION
+-- =====================================================
+
+local function SerializeColor(color)
+    return {R = color.R, G = color.G, B = color.B}
+end
+
+local function DeserializeColor(data)
+    if data and data.R and data.G and data.B then
+        return Color3.new(data.R, data.G, data.B)
+    end
+    return nil
+end
+
+-- =====================================================
+-- LOAD / SAVE CONFIG
+-- =====================================================
+
+local function LoadSavedConfig()
+    local saved = SaveManager:Load()
+    if not saved then return end
+
+    if saved.Aimbot then
+        for k, v in pairs(saved.Aimbot) do
+            if k == "FOVColor" then
+                local c = DeserializeColor(v)
+                if c then AimbotConfig.FOVColor = c end
+            elseif AimbotConfig[k] ~= nil then
+                AimbotConfig[k] = v
+            end
+        end
+        if saved.Aimbot.Keybind then
+            AimbotConfig.Keybind = Enum.KeyCode[saved.Aimbot.Keybind] or Enum.KeyCode.E
+        end
+    end
+
+    if saved.ESP then
+        for k, v in pairs(saved.ESP) do
+            if k:find("Color") then
+                local c = DeserializeColor(v)
+                if c then ESPConfig[k] = c end
+            elseif ESPConfig[k] ~= nil then
+                ESPConfig[k] = v
+            end
+        end
+    end
+
+    if saved.Crosshair then
+        for k, v in pairs(saved.Crosshair) do
+            if k == "Color" or k == "OutlineColor" then
+                local c = DeserializeColor(v)
+                if c then CrosshairConfig[k] = c end
+            elseif CrosshairConfig[k] ~= nil then
+                CrosshairConfig[k] = v
+            end
+        end
+    end
+
+    if saved.Movement then
+        for k, v in pairs(saved.Movement) do
+            if MovementConfig[k] ~= nil then MovementConfig[k] = v end
+        end
+    end
+
+    if saved.Misc then
+        for k, v in pairs(saved.Misc) do
+            if k == "MenuKeybind" then
+                MiscConfig.MenuKeybind = Enum.KeyCode[v] or Enum.KeyCode.RightShift
+            elseif MiscConfig[k] ~= nil then
+                MiscConfig[k] = v
+            end
+        end
+    end
+end
+
+local function SaveCurrentConfig()
+    local config = {
+        Aimbot = {
+            Enabled = AimbotConfig.Enabled,
+            TargetPart = AimbotConfig.TargetPart,
+            FOV = AimbotConfig.FOV,
+            Smoothing = AimbotConfig.Smoothing,
+            TeamCheck = AimbotConfig.TeamCheck,
+            WallCheck = AimbotConfig.WallCheck,
+            ShowFOV = AimbotConfig.ShowFOV,
+            FOVColor = SerializeColor(AimbotConfig.FOVColor),
+            Keybind = tostring(AimbotConfig.Keybind.Name),
+        },
+        ESP = {
+            Enabled = ESPConfig.Enabled,
+            BoxESP = ESPConfig.BoxESP,
+            SkeletonESP = ESPConfig.SkeletonESP,
+            ShowName = ESPConfig.ShowName,
+            ShowHealth = ESPConfig.ShowHealth,
+            ShowDistance = ESPConfig.ShowDistance,
+            ShowTool = ESPConfig.ShowTool,
+            ShowTeam = ESPConfig.ShowTeam,
+            BoxColor = SerializeColor(ESPConfig.BoxColor),
+            SkeletonColor = SerializeColor(ESPConfig.SkeletonColor),
+            NameColor = SerializeColor(ESPConfig.NameColor),
+            HealthColor = SerializeColor(ESPConfig.HealthColor),
+            DistanceColor = SerializeColor(ESPConfig.DistanceColor),
+            ToolColor = SerializeColor(ESPConfig.ToolColor),
+            TeamColor = SerializeColor(ESPConfig.TeamColor),
+            MaxDistance = ESPConfig.MaxDistance,
+            TeamCheck = ESPConfig.TeamCheck,
+            BoxThickness = ESPConfig.BoxThickness,
+            SkeletonThickness = ESPConfig.SkeletonThickness,
+            TextSize = ESPConfig.TextSize,
+        },
+        Crosshair = {
+            Enabled = CrosshairConfig.Enabled,
+            Color = SerializeColor(CrosshairConfig.Color),
+            Size = CrosshairConfig.Size,
+            Thickness = CrosshairConfig.Thickness,
+            Transparency = CrosshairConfig.Transparency,
+            Outline = CrosshairConfig.Outline,
+            OutlineColor = SerializeColor(CrosshairConfig.OutlineColor),
+            Rotate = CrosshairConfig.Rotate,
+        },
+        Movement = {
+            Speed = MovementConfig.Speed,
+            SpeedValue = MovementConfig.SpeedValue,
+            Jump = MovementConfig.Jump,
+            JumpValue = MovementConfig.JumpValue,
+            InfiniteJump = MovementConfig.InfiniteJump,
+            Noclip = MovementConfig.Noclip,
+            Fly = MovementConfig.Fly,
+            FlySpeed = MovementConfig.FlySpeed,
+        },
+        Misc = {
+            JesusBackground = MiscConfig.JesusBackground,
+            JesusTransparency = MiscConfig.JesusTransparency,
+            MenuKeybind = tostring(MiscConfig.MenuKeybind.Name),
+        },
+    }
+    SaveManager:Save(config)
+end
+
+LoadSavedConfig()
+
+task.spawn(function()
+    while true do
+        task.wait(15)
+        SaveCurrentConfig()
+    end
+end)
+
+-- =====================================================
+-- CONNECTIONS
+-- =====================================================
+
+local Connections = {}
+local function AddConnection(c) table.insert(Connections, c) end
+
+-- =====================================================
+-- DRAWING API WRAPPER
+-- =====================================================
+
+local DrawingAPI = Drawing and Drawing.new or nil
+
+if not DrawingAPI then
+    warn("[ZNK] Drawing API not available. ESP and Crosshair may not work.")
+end
+
+local function CreateDrawing(type, props)
+    if not DrawingAPI then return nil end
+    local drawing = Drawing.new(type)
+    for k, v in pairs(props) do
+        pcall(function() drawing[k] = v end)
+    end
+    return drawing
+end
+
+-- =====================================================
+-- JESUS BACKGROUND
+-- =====================================================
+
+local JesusGui = Instance.new("ScreenGui")
+JesusGui.Name = "JesusBackground"
+JesusGui.ResetOnSpawn = false
+JesusGui.IgnoreGuiInset = true
+JesusGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+JesusGui.Enabled = MiscConfig.JesusBackground
+pcall(function() JesusGui.Parent = CoreGui end)
+if not JesusGui.Parent then JesusGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local JesusImage = Instance.new("ImageLabel")
+JesusImage.Name = "JesusImage"
+JesusImage.Size = UDim2.new(1, 0, 1, 0)
+JesusImage.Position = UDim2.new(0, 0, 0, 0)
+JesusImage.BackgroundTransparency = 1
+JesusImage.Image = "rbxassetid://10823839952"
+JesusImage.ImageTransparency = MiscConfig.JesusTransparency
+JesusImage.ScaleType = Enum.ScaleType.Fit
+JesusImage.Parent = JesusGui
+
+-- =====================================================
+-- FPS COUNTER
+-- =====================================================
+
+local FPSGui = Instance.new("ScreenGui")
+FPSGui.Name = "FPSCounterGui"
+FPSGui.ResetOnSpawn = false
+FPSGui.IgnoreGuiInset = true
+FPSGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() FPSGui.Parent = CoreGui end)
+if not FPSGui.Parent then FPSGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local FPSFrame = Instance.new("Frame")
+FPSFrame.Name = "FPSFrame"
+FPSFrame.Size = UDim2.new(0, 120, 0, 32)
+FPSFrame.Position = UDim2.new(0.5, -60, 0, 8)
+FPSFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
+FPSFrame.BackgroundTransparency = 0.3
+FPSFrame.BorderSizePixel = 0
+FPSFrame.Parent = FPSGui
+
+local FPSCorner = Instance.new("UICorner")
+FPSCorner.CornerRadius = UDim.new(0, 8)
+FPSCorner.Parent = FPSFrame
+
+local FPSStroke = Instance.new("UIStroke")
+FPSStroke.Color = Color3.fromRGB(80, 80, 90)
+FPSStroke.Thickness = 1
+FPSStroke.Transparency = 0.3
+FPSStroke.Parent = FPSFrame
+
+local FPSText = Instance.new("TextLabel")
+FPSText.Size = UDim2.new(1, 0, 1, 0)
+FPSText.BackgroundTransparency = 1
+FPSText.Text = "60 FPS"
+FPSText.TextColor3 = Color3.fromRGB(255, 255, 255)
+FPSText.TextSize = 15
+FPSText.Font = Enum.Font.GothamBold
+FPSText.TextXAlignment = Enum.TextXAlignment.Center
+FPSText.TextYAlignment = Enum.TextYAlignment.Center
+FPSText.ZIndex = 2
+FPSText.Parent = FPSFrame
+
+local FPSCounter = 0
+local LastFPSUpdate = tick()
+
+-- =====================================================
+-- MOVEMENT SYSTEM
+-- =====================================================
+
+local FlyBodyVelocity = nil
+local FlyBodyGyro = nil
+local NoclipConnection = nil
+
+local function UpdateSpeed()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local h = char:FindFirstChild("Humanoid")
+    if not h then return end
+    if MovementConfig.Speed then
+        local target = MovementConfig.SpeedValue
+        local current = MovementConfig.SpeedCurrent or h.WalkSpeed
+        local step = math.min(2, math.abs(target - current))
+        current = current < target and current + step or target
+        MovementConfig.SpeedCurrent = current
+        h.WalkSpeed = current
+    else
+        MovementConfig.SpeedCurrent = 16
+        h.WalkSpeed = 16
+    end
+    h.JumpPower = MovementConfig.Jump and MovementConfig.JumpValue or 50
+end
+
+local function EnableFly()
+    pcall(function()
+        local char = LocalPlayer.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        if FlyBodyVelocity then FlyBodyVelocity:Destroy() FlyBodyVelocity = nil end
+        if FlyBodyGyro then FlyBodyGyro:Destroy() FlyBodyGyro = nil end
+        FlyBodyVelocity = Instance.new("BodyVelocity")
+        FlyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        FlyBodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+        FlyBodyVelocity.P = 1e4
+        FlyBodyVelocity.Parent = root
+        FlyBodyGyro = Instance.new("BodyGyro")
+        FlyBodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+        FlyBodyGyro.P = 1e4
+        FlyBodyGyro.D = 500
+        FlyBodyGyro.CFrame = root.CFrame
+        FlyBodyGyro.Parent = root
+    end)
+end
+
+local function DisableFly()
+    pcall(function()
+        if FlyBodyVelocity then FlyBodyVelocity:Destroy() FlyBodyVelocity = nil end
+        if FlyBodyGyro then FlyBodyGyro:Destroy() FlyBodyGyro = nil end
+    end)
+end
+
+local function UpdateFly()
+    pcall(function()
+        if not MovementConfig.Fly or not FlyBodyVelocity or not FlyBodyGyro then return end
+        local cam = Camera.CFrame
+        local dir = Vector3.new(0, 0, 0)
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0, 1, 0) end
+        local target = dir.Magnitude > 0 and dir.Unit * MovementConfig.FlySpeed or Vector3.new(0, 0, 0)
+        FlyBodyVelocity.Velocity = FlyBodyVelocity.Velocity:Lerp(target, 0.2)
+        FlyBodyGyro.CFrame = cam
+    end)
+end
+
+local function EnableNoclip()
+    if NoclipConnection then return end
+    NoclipConnection = RunService.Stepped:Connect(function()
+        if MovementConfig.Noclip then
+            local char = LocalPlayer.Character
+            if char then
+                for _, p in pairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide = false end
+                end
+            end
+        end
+    end)
+end
+
+local function DisableNoclip()
+    if NoclipConnection then NoclipConnection:Disconnect() NoclipConnection = nil end
+    local char = LocalPlayer.Character
+    if char then
+        for _, p in pairs(char:GetDescendants()) do
+            if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.CanCollide = true end
+        end
+    end
+end
+
+-- =====================================================
+-- ESP SYSTEM
+-- =====================================================
+
+local ESPDrawings = {}
+
+local function GetSkeletonParts(character)
+    local parts = {}
+    if not character then return parts end
+
+    local head = character:FindFirstChild("Head")
+    local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+    local lowerTorso = character:FindFirstChild("LowerTorso") or character:FindFirstChild("Torso")
+
+    if head and torso then
+        table.insert(parts, {head, torso})
+    end
+
+    if torso then
+        local leftArm = character:FindFirstChild("Left Arm") or character:FindFirstChild("LeftUpperArm")
+        local rightArm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightUpperArm")
+        local leftLeg = character:FindFirstChild("Left Leg") or character:FindFirstChild("LeftUpperLeg")
+        local rightLeg = character:FindFirstChild("Right Leg") or character:FindFirstChild("RightUpperLeg")
+
+        if leftArm then table.insert(parts, {torso, leftArm}) end
+        if rightArm then table.insert(parts, {torso, rightArm}) end
+
+        if lowerTorso then
+            if leftLeg then table.insert(parts, {lowerTorso, leftLeg}) end
+            if rightLeg then table.insert(parts, {lowerTorso, rightLeg}) end
+
+            if torso ~= lowerTorso then
+                table.insert(parts, {torso, lowerTorso})
+            end
+        end
+
+        -- R15 additional parts
+        local leftLowerArm = character:FindFirstChild("LeftLowerArm")
+        local rightLowerArm = character:FindFirstChild("RightLowerArm")
+        local leftHand = character:FindFirstChild("LeftHand")
+        local rightHand = character:FindFirstChild("RightHand")
+        local leftLowerLeg = character:FindFirstChild("LeftLowerLeg")
+        local rightLowerLeg = character:FindFirstChild("RightLowerLeg")
+        local leftFoot = character:FindFirstChild("LeftFoot")
+        local rightFoot = character:FindFirstChild("RightFoot")
+
+        if leftLowerArm and leftHand then table.insert(parts, {leftLowerArm, leftHand}) end
+        if rightLowerArm and rightHand then table.insert(parts, {rightLowerArm, rightHand}) end
+        if leftLowerLeg and leftFoot then table.insert(parts, {leftLowerLeg, leftFoot}) end
+        if rightLowerLeg and rightFoot then table.insert(parts, {rightLowerLeg, rightFoot}) end
+
+        local leftUpperArm = character:FindFirstChild("LeftUpperArm")
+        local rightUpperArm = character:FindFirstChild("RightUpperArm")
+        local leftUpperLeg = character:FindFirstChild("LeftUpperLeg")
+        local rightUpperLeg = character:FindFirstChild("RightUpperLeg")
+
+        if leftUpperArm and leftLowerArm then table.insert(parts, {leftUpperArm, leftLowerArm}) end
+        if rightUpperArm and rightLowerArm then table.insert(parts, {rightUpperArm, rightLowerArm}) end
+        if leftUpperLeg and leftLowerLeg then table.insert(parts, {leftUpperLeg, leftLowerLeg}) end
+        if rightUpperLeg and rightLowerLeg then table.insert(parts, {rightUpperLeg, rightLowerLeg}) end
+    end
+
+    return parts
+end
+
+local function ClearESPForPlayer(player)
+    if ESPDrawings[player] then
+        for _, drawings in pairs(ESPDrawings[player]) do
+            if type(drawings) == "table" then
+                for _, d in pairs(drawings) do
+                    pcall(function() d:Remove() end)
+                end
+            else
+                pcall(function() drawings:Remove() end)
+            end
+        end
+        ESPDrawings[player] = nil
+    end
+end
+
+local function UpdateESPForPlayer(player)
+    if not ESPConfig.Enabled then
+        ClearESPForPlayer(player)
+        return
+    end
+
+    local character = player.Character
+    if not character then
+        ClearESPForPlayer(player)
+        return
+    end
+
+    local root = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not root or not humanoid or humanoid.Health <= 0 then
+        ClearESPForPlayer(player)
+        return
+    end
+
+    if ESPConfig.TeamCheck and player.Team == LocalPlayer.Team then
+        ClearESPForPlayer(player)
+        return
+    end
+
+    local rootPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+    if not onScreen then
+        ClearESPForPlayer(player)
+        return
+    end
+
+    local distance = (Camera.CFrame.Position - root.Position).Magnitude
+    if distance > ESPConfig.MaxDistance then
+        ClearESPForPlayer(player)
+        return
+    end
+
+    if not ESPDrawings[player] then
+        ESPDrawings[player] = {}
+    end
+
+    local drawings = ESPDrawings[player]
+
+    -- Box ESP
+    if ESPConfig.BoxESP then
+        local head = character:FindFirstChild("Head")
+        if not head then head = root end
+        local headPos = Camera:WorldToViewportPoint(head.Position)
+        local rootPos = Camera:WorldToViewportPoint(root.Position)
+
+        local height = math.abs(rootPos.Y - headPos.Y) * 2.2
+        local width = height / 2
+
+        local topLeft = Vector2.new(headPos.X - width / 2, headPos.Y - height * 0.1)
+        local topRight = Vector2.new(headPos.X + width / 2, headPos.Y - height * 0.1)
+        local bottomLeft = Vector2.new(headPos.X - width / 2, rootPos.Y + height * 0.4)
+        local bottomRight = Vector2.new(headPos.X + width / 2, rootPos.Y + height * 0.4)
+
+        if not drawings.BoxLines then
+            drawings.BoxLines = {}
+            for i = 1, 4 do
+                drawings.BoxLines[i] = CreateDrawing("Line", {
+                    Thickness = ESPConfig.BoxThickness,
+                    Color = ESPConfig.BoxColor,
+                    Transparency = 1,
+                })
+            end
+        end
+
+        local lines = {
+            {topLeft, topRight},
+            {topRight, bottomRight},
+            {bottomRight, bottomLeft},
+            {bottomLeft, topLeft},
+        }
+
+        for i, line in pairs(lines) do
+            local d = drawings.BoxLines[i]
+            if d then
+                d.From = line[1]
+                d.To = line[2]
+                d.Color = ESPConfig.BoxColor
+                d.Thickness = ESPConfig.BoxThickness
+                d.Visible = true
+            end
+        end
+    elseif drawings.BoxLines then
+        for _, d in pairs(drawings.BoxLines) do
+            pcall(function() d.Visible = false end)
+        end
+    end
+
+    -- Skeleton ESP
+    if ESPConfig.SkeletonESP then
+        local skeletonParts = GetSkeletonParts(character)
+        if not drawings.SkeletonLines then
+            drawings.SkeletonLines = {}
+        end
+
+        for i, parts in pairs(skeletonParts) do
+            if not drawings.SkeletonLines[i] then
+                drawings.SkeletonLines[i] = CreateDrawing("Line", {
+                    Thickness = ESPConfig.SkeletonThickness,
+                    Color = ESPConfig.SkeletonColor,
+                    Transparency = 1,
+                })
+            end
+            local part1, part2 = parts[1], parts[2]
+            if part1 and part2 then
+                local pos1 = Camera:WorldToViewportPoint(part1.Position)
+                local pos2 = Camera:WorldToViewportPoint(part2.Position)
+                local d = drawings.SkeletonLines[i]
+                if d then
+                    d.From = Vector2.new(pos1.X, pos1.Y)
+                    d.To = Vector2.new(pos2.X, pos2.Y)
+                    d.Color = ESPConfig.SkeletonColor
+                    d.Thickness = ESPConfig.SkeletonThickness
+                    d.Visible = true
+                end
+            end
+        end
+    elseif drawings.SkeletonLines then
+        for _, d in pairs(drawings.SkeletonLines) do
+            pcall(function() d.Visible = false end)
+        end
+    end
+
+    -- Text ESP (Name, Health, Distance, Tool, Team)
+    local textLines = {}
+    local yOffset = 0
+
+    if ESPConfig.ShowName then
+        table.insert(textLines, {text = player.Name, color = ESPConfig.NameColor})
+    end
+    if ESPConfig.ShowHealth then
+        local hp = math.floor(humanoid.Health)
+        local maxHp = math.floor(humanoid.MaxHealth)
+        table.insert(textLines, {text = hp .. "/" .. maxHp, color = ESPConfig.HealthColor})
+    end
+    if ESPConfig.ShowDistance then
+        table.insert(textLines, {text = math.floor(distance) .. "m", color = ESPConfig.DistanceColor})
+    end
+    if ESPConfig.ShowTool then
+        local tool = character:FindFirstChildWhichIsA("Tool")
+        if tool then
+            table.insert(textLines, {text = tool.Name, color = ESPConfig.ToolColor})
+        end
+    end
+    if ESPConfig.ShowTeam then
+        if player.Team then
+            table.insert(textLines, {text = player.Team.Name, color = ESPConfig.TeamColor})
+        end
+    end
+
+    if #textLines > 0 then
+        if not drawings.Texts then
+            drawings.Texts = {}
+        end
+
+        local basePos = Vector2.new(rootPos.X, rootPos.Y - height / 2 - 10) if height then
+            basePos = Vector2.new(rootPos.X, rootPos.Y - 60)
+        else
+            basePos = Vector2.new(rootPos.X, rootPos.Y - 60)
+        end
+
+        for i, lineData in pairs(textLines) do
+            if not drawings.Texts[i] then
+                drawings.Texts[i] = CreateDrawing("Text", {
+                    Text = lineData.text,
+                    Color = lineData.color,
+                    Size = ESPConfig.TextSize,
+                    Center = true,
+                    Outline = true,
+                    Font = 2,
+                })
+            end
+            local d = drawings.Texts[i]
+            if d then
+                d.Text = lineData.text
+                d.Color = lineData.color
+                d.Size = ESPConfig.TextSize
+                d.Position = Vector2.new(rootPos.X, rootPos.Y - 60 - (#textLines - i) * 15)
+                d.Visible = true
+            end
+        end
+
+        -- Hide extra texts
+        for i = #textLines + 1, #drawings.Texts do
+            if drawings.Texts[i] then
+                pcall(function() drawings.Texts[i].Visible = false end)
+            end
+        end
+    elseif drawings.Texts then
+        for _, d in pairs(drawings.Texts) do
+            pcall(function() d.Visible = false end)
+        end
+    end
+end
+
+local function ClearAllESP()
+    for player, _ in pairs(ESPDrawings) do
+        ClearESPForPlayer(player)
+    end
+end
+
+AddConnection(Players.PlayerRemoving:Connect(function(player)
+    ClearESPForPlayer(player)
+end))
+
+-- =====================================================
+-- AIMBOT SYSTEM
+-- =====================================================
+
+local AimbotActive = false
+local FOVCircle = nil
+
+local function UpdateFOVCircle()
+    if not DrawingAPI then return end
+    if AimbotConfig.ShowFOV and AimbotConfig.Enabled then
+        if not FOVCircle then
+            FOVCircle = CreateDrawing("Circle", {
+                Thickness = 1,
+                NumSides = 60,
+                Radius = AimbotConfig.FOV,
+                Filled = false,
+                Color = AimbotConfig.FOVColor,
+                Visible = true,
+            })
+        end
+        FOVCircle.Radius = AimbotConfig.FOV
+        FOVCircle.Color = AimbotConfig.FOVColor
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        FOVCircle.Visible = true
+    elseif FOVCircle then
+        FOVCircle.Visible = false
+    end
+end
+
+local function IsPlayerVisible(player)
+    if not AimbotConfig.WallCheck then return true end
+    local character = player.Character
+    if not character then return false end
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+    local camPos = Camera.CFrame.Position
+    local rootPos = root.Position
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {character, LocalPlayer.Character}
+    local result = Workspace:Raycast(camPos, rootPos - camPos, rayParams)
+    return result == nil
+end
+
+local function GetClosestPlayerToCrosshair()
+    local closestPlayer = nil
+    local shortestDistance = AimbotConfig.FOV
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            if not (AimbotConfig.TeamCheck and player.Team == LocalPlayer.Team) then
+                local character = player.Character
+                if character then
+                    local targetPart = character:FindFirstChild(AimbotConfig.TargetPart)
+                    if not targetPart then
+                        targetPart = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+                    end
+                    if targetPart then
+                        local humanoid = character:FindFirstChild("Humanoid")
+                        if humanoid and humanoid.Health > 0 then
+                            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                            if onScreen then
+                                local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                                if distance < shortestDistance then
+                                    if IsPlayerVisible(player) then
+                                        shortestDistance = distance
+                                        closestPlayer = player
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+local function UpdateAimbot()
+    if not AimbotActive or not AimbotConfig.Enabled then return end
+    local target = GetClosestPlayerToCrosshair()
+    if target then
+        local character = target.Character
+        if character then
+            local targetPart = character:FindFirstChild(AimbotConfig.TargetPart)
+            if not targetPart then
+                targetPart = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+            end
+            if targetPart then
+                local targetPos = targetPart.Position
+                local camPos = Camera.CFrame.Position
+                local direction = (targetPos - camPos).Unit
+                local smoothFactor = 1 - AimbotConfig.Smoothing
+                local newLook = CFrame.new(camPos, camPos + direction:Lerp(Camera.CFrame.LookVector, smoothFactor))
+                Camera.CFrame = Camera.CFrame:Lerp(newLook, AimbotConfig.Smoothing)
+            end
+        end
+    end
+end
+
+-- Aimbot keybind
+AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == AimbotConfig.Keybind then
+        AimbotActive = not AimbotActive
+    end
+end))
+
+-- =====================================================
+-- CROSSHAIR - STAR OF DAVID
+-- =====================================================
+
+local CrosshairDrawings = {}
+local CrosshairRotation = 0
+
+local function CreateCrosshairDrawings()
+    if not DrawingAPI then return end
+    if CrosshairDrawings.lines then return end
+
+    CrosshairDrawings.lines = {}
+    -- 6 lines for Star of David (3 per triangle)
+    for i = 1, 6 do
+        CrosshairDrawings.lines[i] = CreateDrawing("Line", {
+            Thickness = CrosshairConfig.Thickness,
+            Color = CrosshairConfig.Color,
+            Transparency = 1 - CrosshairConfig.Transparency,
+        })
+    end
+end
+
+local function UpdateCrosshair(dt)
+    if not CrosshairConfig.Enabled or not DrawingAPI then
+        if CrosshairDrawings.lines then
+            for _, line in pairs(CrosshairDrawings.lines) do
+                pcall(function() line.Visible = false end)
+            end
+        end
+        return
+    end
+
+    CreateCrosshairDrawings()
+    if not CrosshairDrawings.lines then return end
+
+    if CrosshairConfig.Rotate then
+        CrosshairRotation = CrosshairRotation + dt * 30
+    end
+
+    local centerX = Camera.ViewportSize.X / 2
+    local centerY = Camera.ViewportSize.Y / 2
+    local size = CrosshairConfig.Size
+
+    -- Triangle 1 (pointing up)
+    local t1 = {}
+    local angleOffset1 = CrosshairRotation
+    for i = 0, 2 do
+        local angle = math.rad(angleOffset1 + i * 120 - 90)
+        table.insert(t1, Vector2.new(centerX + math.cos(angle) * size, centerY + math.sin(angle) * size))
+    end
+
+    -- Triangle 2 (pointing down)
+    local t2 = {}
+    local angleOffset2 = CrosshairRotation + 60
+    for i = 0, 2 do
+        local angle = math.rad(angleOffset2 + i * 120 - 90)
+        table.insert(t2, Vector2.new(centerX + math.cos(angle) * size, centerY + math.sin(angle) * size))
+    end
+
+    -- Draw Triangle 1
+    local lines = CrosshairDrawings.lines
+    lines[1].From = t1[1] lines[1].To = t1[2]
+    lines[2].From = t1[2] lines[2].To = t1[3]
+    lines[3].From = t1[3] lines[3].To = t1[1]
+
+    -- Draw Triangle 2
+    lines[4].From = t2[1] lines[4].To = t2[2]
+    lines[5].From = t2[2] lines[5].To = t2[3]
+    lines[6].From = t2[3] lines[6].To = t2[1]
+
+    for _, line in pairs(lines) do
+        line.Color = CrosshairConfig.Color
+        line.Thickness = CrosshairConfig.Thickness
+        line.Transparency = 1 - CrosshairConfig.Transparency
+        line.Visible = true
+    end
+end
+
+-- =====================================================
+-- RAYFIELD UI
+-- =====================================================
+
+local guiSnapshotBefore = {}
+pcall(function()
+    for _, g in ipairs(CoreGui:GetChildren()) do
+        guiSnapshotBefore[g] = true
+    end
+end)
+
+local Window = Rayfield:CreateWindow({
+    Name = "ZNK HUB",
+    LoadingTitle = "ZNK HUB v8",
+    LoadingSubtitle = "Loading...",
+    ConfigurationSaving = { Enabled = false },
+    Discord = { Enabled = false },
+    KeySystem = false,
+})
+
+local RayfieldGui
+pcall(function()
+    for _, g in ipairs(CoreGui:GetChildren()) do
+        if not guiSnapshotBefore[g] and g:IsA("ScreenGui") then
+            RayfieldGui = g
+            break
+        end
+    end
+end)
+
+if not RayfieldGui then
+    pcall(function()
+        for _, g in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
+            if g.Name:lower():find("rayfield") then
+                RayfieldGui = g
+                break
+            end
+        end
+    end)
+end
+
+-- =====================================================
+-- TAB AIMBOT
+-- =====================================================
+
+local TabAimbot = Window:CreateTab("Aimbot", nil)
+
+TabAimbot:CreateSection("Aimbot Settings")
+
+TabAimbot:CreateToggle({
+    Name = "Activer l'Aimbot",
+    CurrentValue = AimbotConfig.Enabled,
+    Flag = "AimbotEnabled",
+    Callback = function(v)
+        AimbotConfig.Enabled = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabAimbot:CreateDropdown({
+    Name = "Partie du corps visee",
+    Options = { "Head", "HumanoidRootPart", "UpperTorso", "Torso", "LowerTorso" },
+    CurrentOption = { AimbotConfig.TargetPart },
+    Flag = "AimbotTargetPart",
+    Callback = function(opt)
+        local raw = opt[1] or opt
+        AimbotConfig.TargetPart = raw
+        SaveCurrentConfig()
+    end,
+})
+
+TabAimbot:CreateKeybind({
+    Name = "Touche pour activer/desactiver l'aimbot",
+    CurrentKeybind = AimbotConfig.Keybind.Name,
+    HoldToInteract = false,
+    Flag = "AimbotKeybind",
+    Callback = function()
+        -- handled by InputBegan
+    end,
+})
+
+TabAimbot:CreateSection("Aimbot Parametres")
+
+TabAimbot:CreateSlider({
+    Name = "FOV (Champ de vision)",
+    Range = { 10, 500 },
+    Increment = 5,
+    CurrentValue = AimbotConfig.FOV,
+    Flag = "AimbotFOV",
+    Callback = function(v)
+        AimbotConfig.FOV = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabAimbot:CreateSlider({
+    Name = "Smoothing (Fluidite)",
+    Range = { 0.05, 1 },
+    Increment = 0.05,
+    CurrentValue = AimbotConfig.Smoothing,
+    Flag = "AimbotSmoothing",
+    Callback = function(v)
+        AimbotConfig.Smoothing = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabAimbot:CreateToggle({
+    Name = "Team Check (ignorer son equipe)",
+    CurrentValue = AimbotConfig.TeamCheck,
+    Flag = "AimbotTeamCheck",
+    Callback = function(v)
+        AimbotConfig.TeamCheck = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabAimbot:CreateToggle({
+    Name = "Wall Check (verifier les murs)",
+    CurrentValue = AimbotConfig.WallCheck,
+    Flag = "AimbotWallCheck",
+    Callback = function(v)
+        AimbotConfig.WallCheck = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabAimbot:CreateSection("FOV Circle")
+
+TabAimbot:CreateToggle({
+    Name = "Afficher le cercle FOV",
+    CurrentValue = AimbotConfig.ShowFOV,
+    Flag = "AimbotShowFOV",
+    Callback = function(v)
+        AimbotConfig.ShowFOV = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabAimbot:CreateColorPicker({
+    Name = "Couleur du cercle FOV",
+    Color = AimbotConfig.FOVColor,
+    Flag = "AimbotFOVColor",
+    Callback = function(color)
+        AimbotConfig.FOVColor = color
+        SaveCurrentConfig()
+    end,
+})
+
+-- =====================================================
+-- TAB ESP
+-- =====================================================
+
+local TabESP = Window:CreateTab("ESP", nil)
+
+TabESP:CreateSection("ESP Settings")
+
+TabESP:CreateToggle({
+    Name = "Activer l'ESP",
+    CurrentValue = ESPConfig.Enabled,
+    Flag = "ESPEnabled",
+    Callback = function(v)
+        ESPConfig.Enabled = v
+        if not v then ClearAllESP() end
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateSection("ESP Type")
+
+TabESP:CreateToggle({
+    Name = "Box ESP (Rectangle)",
+    CurrentValue = ESPConfig.BoxESP,
+    Flag = "ESPBox",
+    Callback = function(v)
+        ESPConfig.BoxESP = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateToggle({
+    Name = "Skeleton ESP",
+    CurrentValue = ESPConfig.SkeletonESP,
+    Flag = "ESPSkeleton",
+    Callback = function(v)
+        ESPConfig.SkeletonESP = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateSection("ESP Informations")
+
+TabESP:CreateToggle({
+    Name = "Afficher le nom",
+    CurrentValue = ESPConfig.ShowName,
+    Flag = "ESPName",
+    Callback = function(v)
+        ESPConfig.ShowName = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateToggle({
+    Name = "Afficher la sante",
+    CurrentValue = ESPConfig.ShowHealth,
+    Flag = "ESPHealth",
+    Callback = function(v)
+        ESPConfig.ShowHealth = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateToggle({
+    Name = "Afficher la distance",
+    CurrentValue = ESPConfig.ShowDistance,
+    Flag = "ESPDistance",
+    Callback = function(v)
+        ESPConfig.ShowDistance = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateToggle({
+    Name = "Afficher l'outil",
+    CurrentValue = ESPConfig.ShowTool,
+    Flag = "ESPTool",
+    Callback = function(v)
+        ESPConfig.ShowTool = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateToggle({
+    Name = "Afficher l'equipe",
+    CurrentValue = ESPConfig.ShowTeam,
+    Flag = "ESPTeam",
+    Callback = function(v)
+        ESPConfig.ShowTeam = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateSection("ESP Couleurs")
+
+TabESP:CreateColorPicker({
+    Name = "Couleur Box",
+    Color = ESPConfig.BoxColor,
+    Flag = "ESPBoxColor",
+    Callback = function(color)
+        ESPConfig.BoxColor = color
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateColorPicker({
+    Name = "Couleur Squelette",
+    Color = ESPConfig.SkeletonColor,
+    Flag = "ESPSkeletonColor",
+    Callback = function(color)
+        ESPConfig.SkeletonColor = color
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateColorPicker({
+    Name = "Couleur Nom",
+    Color = ESPConfig.NameColor,
+    Flag = "ESPNameColor",
+    Callback = function(color)
+        ESPConfig.NameColor = color
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateColorPicker({
+    Name = "Couleur Sante",
+    Color = ESPConfig.HealthColor,
+    Flag = "ESPHealthColor",
+    Callback = function(color)
+        ESPConfig.HealthColor = color
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateColorPicker({
+    Name = "Couleur Distance",
+    Color = ESPConfig.DistanceColor,
+    Flag = "ESPDistanceColor",
+    Callback = function(color)
+        ESPConfig.DistanceColor = color
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateColorPicker({
+    Name = "Couleur Outil",
+    Color = ESPConfig.ToolColor,
+    Flag = "ESPToolColor",
+    Callback = function(color)
+        ESPConfig.ToolColor = color
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateColorPicker({
+    Name = "Couleur Equipe",
+    Color = ESPConfig.TeamColor,
+    Flag = "ESPTeamColor",
+    Callback = function(color)
+        ESPConfig.TeamColor = color
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateSection("ESP Parametres")
+
+TabESP:CreateSlider({
+    Name = "Distance maximale",
+    Range = { 100, 5000 },
+    Increment = 50,
+    CurrentValue = ESPConfig.MaxDistance,
+    Flag = "ESPMaxDist",
+    Callback = function(v)
+        ESPConfig.MaxDistance = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateToggle({
+    Name = "Team Check (ignorer son equipe)",
+    CurrentValue = ESPConfig.TeamCheck,
+    Flag = "ESPTeamCheck",
+    Callback = function(v)
+        ESPConfig.TeamCheck = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateSlider({
+    Name = "Epaisseur Box",
+    Range = { 1, 5 },
+    Increment = 1,
+    CurrentValue = ESPConfig.BoxThickness,
+    Flag = "ESPBoxThick",
+    Callback = function(v)
+        ESPConfig.BoxThickness = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateSlider({
+    Name = "Epaisseur Squelette",
+    Range = { 1, 5 },
+    Increment = 1,
+    CurrentValue = ESPConfig.SkeletonThickness,
+    Flag = "ESPSkelThick",
+    Callback = function(v)
+        ESPConfig.SkeletonThickness = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabESP:CreateSlider({
+    Name = "Taille du texte",
+    Range = { 10, 20 },
+    Increment = 1,
+    CurrentValue = ESPConfig.TextSize,
+    Flag = "ESPTextSize",
+    Callback = function(v)
+        ESPConfig.TextSize = v
+        SaveCurrentConfig()
+    end,
+})
+
+-- =====================================================
+-- TAB CROSSHAIR
+-- =====================================================
+
+local TabCrosshair = Window:CreateTab("Crosshair", nil)
+
+TabCrosshair:CreateSection("Star of David Crosshair")
+
+TabCrosshair:CreateToggle({
+    Name = "Activer le Crosshair",
+    CurrentValue = CrosshairConfig.Enabled,
+    Flag = "CrosshairEnabled",
+    Callback = function(v)
+        CrosshairConfig.Enabled = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabCrosshair:CreateColorPicker({
+    Name = "Couleur du Crosshair",
+    Color = CrosshairConfig.Color,
+    Flag = "CrosshairColor",
+    Callback = function(color)
+        CrosshairConfig.Color = color
+        SaveCurrentConfig()
+    end,
+})
+
+TabCrosshair:CreateColorPicker({
+    Name = "Couleur du contour",
+    Color = CrosshairConfig.OutlineColor,
+    Flag = "CrosshairOutlineColor",
+    Callback = function(color)
+        CrosshairConfig.OutlineColor = color
+        SaveCurrentConfig()
+    end,
+})
+
+TabCrosshair:CreateSlider({
+    Name = "Taille",
+    Range = { 5, 100 },
+    Increment = 1,
+    CurrentValue = CrosshairConfig.Size,
+    Flag = "CrosshairSize",
+    Callback = function(v)
+        CrosshairConfig.Size = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabCrosshair:CreateSlider({
+    Name = "Epaisseur",
+    Range = { 1, 5 },
+    Increment = 1,
+    CurrentValue = CrosshairConfig.Thickness,
+    Flag = "CrosshairThickness",
+    Callback = function(v)
+        CrosshairConfig.Thickness = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabCrosshair:CreateSlider({
+    Name = "Transparence",
+    Range = { 0, 0.9 },
+    Increment = 0.1,
+    CurrentValue = CrosshairConfig.Transparency,
+    Flag = "CrosshairTransparency",
+    Callback = function(v)
+        CrosshairConfig.Transparency = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabCrosshair:CreateToggle({
+    Name = "Rotation animee",
+    CurrentValue = CrosshairConfig.Rotate,
+    Flag = "CrosshairRotate",
+    Callback = function(v)
+        CrosshairConfig.Rotate = v
+        SaveCurrentConfig()
+    end,
+})
+
+-- =====================================================
+-- TAB MOVEMENT
+-- =====================================================
+
+local TabMovement = Window:CreateTab("Movement", nil)
+
+TabMovement:CreateSection("Speed")
+
+TabMovement:CreateToggle({
+    Name = "Speed Hack",
+    CurrentValue = MovementConfig.Speed,
+    Flag = "SpeedHack",
+    Callback = function(v)
+        MovementConfig.Speed = v
+        MovementConfig.SpeedCurrent = 16
+        if not v then
+            local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+            if h then h.WalkSpeed = 16 end
+        end
+        SaveCurrentConfig()
+    end,
+})
+
+TabMovement:CreateInput({
+    Name = "Speed Value",
+    PlaceholderText = tostring(MovementConfig.SpeedValue),
+    RemoveTextAfterFocusLost = false,
+    Callback = function(t)
+        local n = tonumber(t)
+        if n and n >= 0 then
+            MovementConfig.SpeedValue = n
+            MovementConfig.SpeedCurrent = 16
+            SaveCurrentConfig()
+        end
+    end,
+})
+
+TabMovement:CreateSection("Jump")
+
+TabMovement:CreateToggle({
+    Name = "Jump Power",
+    CurrentValue = MovementConfig.Jump,
+    Flag = "JumpPower",
+    Callback = function(v)
+        MovementConfig.Jump = v
+        if not v then
+            local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+            if h then h.JumpPower = 50 end
+        end
+        SaveCurrentConfig()
+    end,
+})
+
+TabMovement:CreateInput({
+    Name = "Jump Value",
+    PlaceholderText = tostring(MovementConfig.JumpValue),
+    RemoveTextAfterFocusLost = false,
+    Callback = function(t)
+        local n = tonumber(t)
+        if n and n >= 0 then
+            MovementConfig.JumpValue = n
+            SaveCurrentConfig()
+        end
+    end,
+})
+
+TabMovement:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = MovementConfig.InfiniteJump,
+    Flag = "InfJump",
+    Callback = function(v)
+        MovementConfig.InfiniteJump = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabMovement:CreateSection("Flight")
+
+TabMovement:CreateToggle({
+    Name = "Fly",
+    CurrentValue = MovementConfig.Fly,
+    Flag = "Fly",
+    Callback = function(v)
+        MovementConfig.Fly = v
+        if v then EnableFly() else DisableFly() end
+        SaveCurrentConfig()
+    end,
+})
+
+TabMovement:CreateInput({
+    Name = "Fly Speed",
+    PlaceholderText = tostring(MovementConfig.FlySpeed),
+    RemoveTextAfterFocusLost = false,
+    Callback = function(t)
+        local n = tonumber(t)
+        if n and n > 0 then
+            MovementConfig.FlySpeed = n
+            SaveCurrentConfig()
+        end
+    end,
+})
+
+TabMovement:CreateSection("Advanced")
+
+TabMovement:CreateToggle({
+    Name = "Noclip",
+    CurrentValue = MovementConfig.Noclip,
+    Flag = "Noclip",
+    Callback = function(v)
+        MovementConfig.Noclip = v
+        if v then EnableNoclip() else DisableNoclip() end
+        SaveCurrentConfig()
+    end,
+})
+
+-- =====================================================
+-- TAB MISC
+-- =====================================================
+
+local TabMisc = Window:CreateTab("Misc", nil)
+
+TabMisc:CreateSection("ZNK")
+
+TabMisc:CreateLabel("znk plus puissant que dieux")
+
+TabMisc:CreateSection("Menu Settings")
+
+TabMisc:CreateKeybind({
+    Name = "Toggle Menu",
+    CurrentKeybind = MiscConfig.MenuKeybind.Name,
+    HoldToInteract = false,
+    Flag = "ToggleMenuKeybind",
+    Callback = function()
+        if RayfieldGui then
+            pcall(function()
+                RayfieldGui.Enabled = not RayfieldGui.Enabled
+            end)
+        end
+    end,
+})
+
+-- Also handle the keybind manually for reliability
+AddConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == MiscConfig.MenuKeybind then
+        if RayfieldGui then
+            pcall(function()
+                RayfieldGui.Enabled = not RayfieldGui.Enabled
+            end)
+        end
+    end
+end))
+
+TabMisc:CreateSection("Background")
+
+TabMisc:CreateToggle({
+    Name = "Fond Jesus",
+    CurrentValue = MiscConfig.JesusBackground,
+    Flag = "JesusBg",
+    Callback = function(v)
+        MiscConfig.JesusBackground = v
+        JesusGui.Enabled = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabMisc:CreateSlider({
+    Name = "Transparence du fond",
+    Range = { 0, 0.9 },
+    Increment = 0.1,
+    CurrentValue = MiscConfig.JesusTransparency,
+    Flag = "JesusTransparency",
+    Callback = function(v)
+        MiscConfig.JesusTransparency = v
+        JesusImage.ImageTransparency = v
+        SaveCurrentConfig()
+    end,
+})
+
+TabMisc:CreateSection("Save Config")
+
+TabMisc:CreateButton({
+    Name = "Sauvegarder la configuration",
+    Callback = function()
+        SaveCurrentConfig()
+        Rayfield:Notify({
+            Title = "Config",
+            Content = "Configuration sauvegardee",
+            Duration = 3,
+            Image = 4483362458,
+        })
+    end,
+})
+
+TabMisc:CreateButton({
+    Name = "Recharger la configuration",
+    Callback = function()
+        LoadSavedConfig()
+        Rayfield:Notify({
+            Title = "Config",
+            Content = "Configuration rechargee",
+            Duration = 3,
+            Image = 4483362458,
+        })
+    end,
+})
+
+-- =====================================================
+-- MAIN LOOPS
+-- =====================================================
+
+-- Infinite Jump
+AddConnection(UserInputService.JumpRequest:Connect(function()
+    if MovementConfig.InfiniteJump then
+        local char = LocalPlayer.Character
+        if char then
+            local h = char:FindFirstChild("Humanoid")
+            if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end
+    end
+end))
+
+-- Character respawn
+AddConnection(LocalPlayer.CharacterAdded:Connect(function(char)
+    wait(0.5)
+    MovementConfig.SpeedCurrent = 16
+    local h = char:FindFirstChild("Humanoid")
+    if h then
+        h.WalkSpeed = 16
+        h.JumpPower = 50
+    end
+    if MovementConfig.Fly then
+        task.wait(0.5)
+        EnableFly()
+    end
+    if MovementConfig.Noclip then
+        task.wait(0.5)
+        EnableNoclip()
+    end
+end))
+
+-- Apply loaded config on start
+if MovementConfig.Fly then EnableFly() end
+if MovementConfig.Noclip then EnableNoclip() end
+
+-- Main render loop
+local deltaTime = 0
+AddConnection(RunService.RenderStepped:Connect(function(dt)
+    deltaTime = dt
+    pcall(function()
+        -- FPS Counter
+        FPSCounter = FPSCounter + 1
+        if tick() - LastFPSUpdate >= 1 then
+            FPSText.Text = FPSCounter .. " FPS"
+            FPSCounter = 0
+            LastFPSUpdate = tick()
+        end
+
+        -- Movement
+        if MovementConfig.Fly then UpdateFly() end
+        UpdateSpeed()
+
+        -- Aimbot
+        if AimbotConfig.Enabled then
+            UpdateAimbot()
+            UpdateFOVCircle()
+        elseif FOVCircle then
+            FOVCircle.Visible = false
+        end
+
+        -- ESP
+        if ESPConfig.Enabled then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    task.spawn(function()
+                        pcall(function() UpdateESPForPlayer(player) end)
+                    end)
+                end
+            end
+        end
+
+        -- Crosshair
+        UpdateCrosshair(dt)
+    end)
+end))
+
+Rayfield:Notify({
+    Title = "ZNK HUB",
+    Content = "Script charge avec succes",
+    Duration = 4,
+    Image = 4483362458,
+})
+
+end)
+
+if not success then
+    warn("[ZNK HUB] SCRIPT ERROR:", err)
+end
